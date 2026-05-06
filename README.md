@@ -78,5 +78,5 @@ This project introduces an automated AI-driven ETL (Extract, Transform, Load) pi
    ```bash
    streamlit run app.py
 
-   The application will be available at http://localhost:8501
+The application will be available at http://localhost:8501
 
