@@ -44,6 +44,37 @@ def load_processed_data(filepath: str = PROCESSED_DATA_PATH) -> pd.DataFrame:
     return df
 
 
+def normalize_root_cause(raw_value: str) -> str:
+    """Normalize root cause categories using keyword-based mapping.
+
+    Args:
+        raw_value: The raw category value from the dataset.
+
+    Returns:
+        A normalized category label.
+    """
+    if not isinstance(raw_value, str):
+        return "Unknown"
+
+    value = raw_value.strip()
+    if not value:
+        return "Unknown"
+
+    lowered = value.lower()
+    keyword_groups = [
+        ("Identity Theft/Fraud", ("ident", "fraud", "theft")),
+        ("Billing & Payments", ("bill", "payment", "fee")),
+        ("Account Management", ("account", "close", "manage")),
+        ("Credit Reporting", ("credit", "report", "score")),
+    ]
+
+    for label, keywords in keyword_groups:
+        if any(keyword in lowered for keyword in keywords):
+            return label
+
+    return value
+
+
 st.title("Regulatory Risk Analyzer - Consumer Complaints")
 st.markdown(
     """
@@ -167,12 +198,23 @@ chart_col1, chart_col2 = st.columns(2)
 
 with chart_col1:
     if "root_cause_category" in filtered_df.columns and not filtered_df.empty:
-        root_cause_counts = (
+        normalized_root_causes = (
             filtered_df["root_cause_category"]
             .fillna("Unknown")
-            .value_counts()
-            .reset_index()
+            .astype(str)
+            .apply(normalize_root_cause)
         )
+        root_cause_counts = normalized_root_causes.value_counts()
+        top_categories = root_cause_counts.head(7)
+        other_count = root_cause_counts.iloc[7:].sum()
+        if other_count > 0:
+            top_categories = pd.concat(
+                [
+                    top_categories,
+                    pd.Series({"Other": other_count}),
+                ]
+            )
+        root_cause_counts = top_categories.reset_index()
         root_cause_counts.columns = ["root_cause_category", "count"]
 
         display_mode = st.radio(
