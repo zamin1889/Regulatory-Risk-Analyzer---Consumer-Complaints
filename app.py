@@ -1,4 +1,5 @@
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 st.set_page_config(
@@ -161,3 +162,74 @@ col1.metric("Total Complaints Analyzed", f"{total_complaints:,}")
 col2.metric("Average Severity Score", avg_severity_display)
 col3.metric("Regulatory Risk Flagged", risk_pct_display)
 col4.metric("Top Root Cause Category", top_root_cause)
+
+chart_col1, chart_col2 = st.columns(2)
+
+with chart_col1:
+    if "root_cause_category" in filtered_df.columns and not filtered_df.empty:
+        root_cause_counts = (
+            filtered_df["root_cause_category"]
+            .fillna("Unknown")
+            .value_counts()
+            .reset_index()
+        )
+        root_cause_counts.columns = ["root_cause_category", "count"]
+
+        display_mode = st.radio(
+            "Display",
+            ["Percentage", "Actual Count"],
+            horizontal=True,
+            index=0,
+        )
+        textinfo_value = "percent" if display_mode == "Percentage" else "value"
+
+        fig_root_cause = px.pie(
+            root_cause_counts,
+            names="root_cause_category",
+            values="count",
+            hole=0.5,
+            title="Root Cause Category Distribution",
+            labels={"root_cause_category": "Root Cause", "count": "Complaints"},
+        )
+        fig_root_cause.update_traces(
+            textinfo=textinfo_value,
+            hovertemplate=(
+                "<b>%{label}</b><br>"
+                "Complaints: %{value}<br>"
+                "Share: %{percent}"
+                "<extra></extra>"
+            ),
+        )
+        fig_root_cause.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
+        st.plotly_chart(fig_root_cause, use_container_width=True)
+    else:
+        st.info("No root cause data available for the selected filters.")
+
+with chart_col2:
+    if "Company" in filtered_df.columns and "severity_score" in filtered_df.columns:
+        severity_by_company = (
+            filtered_df.dropna(subset=["Company", "severity_score"])
+            .groupby("Company", as_index=False)["severity_score"]
+            .mean()
+            .sort_values("severity_score", ascending=False)
+        )
+
+        if not severity_by_company.empty:
+            fig_severity = px.bar(
+                severity_by_company,
+                x="Company",
+                y="severity_score",
+                title="Average Severity Score by Company",
+            )
+            fig_severity.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+            )
+            st.plotly_chart(fig_severity, use_container_width=True)
+        else:
+            st.info("No severity data available for the selected filters.")
+    else:
+        st.info("No company severity data available for the selected filters.")
