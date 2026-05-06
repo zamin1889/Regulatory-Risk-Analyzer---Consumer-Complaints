@@ -233,3 +233,28 @@ with chart_col2:
             st.info("No severity data available for the selected filters.")
     else:
         st.info("No company severity data available for the selected filters.")
+
+
+@st.cache_data(show_spinner=False)
+def dataframe_to_csv(df: pd.DataFrame) -> bytes:
+    """Convert a DataFrame to CSV bytes for downloading.
+
+    Args:
+        df: DataFrame to convert.
+
+    Returns:
+        CSV data as UTF-8 encoded bytes.
+    """
+    return df.to_csv(index=False).encode("utf-8")
+
+
+st.subheader("Raw Data & Export")
+st.dataframe(filtered_df, use_container_width=True)
+
+csv_data = dataframe_to_csv(filtered_df)
+st.download_button(
+    label="Download Data as CSV",
+    data=csv_data,
+    file_name="filtered_complaints.csv",
+    mime="text/csv",
+)
