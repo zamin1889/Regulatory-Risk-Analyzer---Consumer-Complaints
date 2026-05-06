@@ -28,6 +28,18 @@ def load_processed_data(filepath: str = PROCESSED_DATA_PATH) -> pd.DataFrame:
     if "Date received" in df.columns:
         df["Date received"] = pd.to_datetime(df["Date received"], errors="coerce")
 
+    if "severity_score" in df.columns:
+        df["severity_score"] = pd.to_numeric(df["severity_score"], errors="coerce")
+
+    if "regulatory_risk_flag" in df.columns:
+        df["regulatory_risk_flag"] = (
+            df["regulatory_risk_flag"]
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .isin(["true", "1", "yes"])
+        )
+
     return df
 
 
@@ -36,7 +48,116 @@ st.markdown(
     """
     <style>
     .block-container { padding-top: 2rem; }
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e3e6eb;
+        border-radius: 12px;
+        padding: 18px 16px;
+        box-shadow: 0 2px 10px rgba(16, 24, 40, 0.08);
+    }
+    div[data-testid="stMetric"] label {
+        color: #1f2937;
+        font-weight: 600;
+    }
+    div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+        color: #0f172a;
+    }
+    div[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+        color: #475569;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+
+df = load_processed_data()
+
+with st.sidebar:
+    st.header("Filters")
+
+    date_series = df.get("Date received", pd.Series([], dtype="datetime64[ns]")).dropna()
+    if not date_series.empty:
+        min_date = date_series.min().date()
+        max_date = date_series.max().date()
+    else:
+        today = pd.Timestamp.today().date()
+        min_date = today
+        max_date = today
+
+    date_range = st.date_input(
+        "Date Range",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+    )
+
+    company_options = sorted(df.get("Company", pd.Series([], dtype=str)).dropna().unique())
+    selected_companies = st.multiselect(
+        "Company",
+        options=company_options,
+        default=company_options,
+    )
+
+    state_options = sorted(df.get("State", pd.Series([], dtype=str)).dropna().unique())
+    selected_states = st.multiselect(
+        "State",
+        options=state_options,
+        default=state_options,
+    )
+
+filtered_df = df.copy()
+
+if isinstance(date_range, (tuple, list)) and len(date_range) == 2:
+    start_date, end_date = date_range
+else:
+    start_date = date_range
+    end_date = date_range
+
+if "Date received" in filtered_df.columns:
+    start_ts = pd.Timestamp(start_date)
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+    filtered_df = filtered_df[
+        filtered_df["Date received"].between(start_ts, end_ts, inclusive="both")
+    ]
+
+if selected_companies and "Company" in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df["Company"].isin(selected_companies)]
+
+if selected_states and "State" in filtered_df.columns:
+    filtered_df = filtered_df[filtered_df["State"].isin(selected_states)]
+
+total_complaints = int(filtered_df.shape[0])
+
+severity_series = (
+    filtered_df["severity_score"]
+    if "severity_score" in filtered_df.columns
+    else pd.Series([], dtype=float)
+)
+avg_severity = severity_series.mean()
+avg_severity_display = f"{avg_severity:.2f}" if pd.notna(avg_severity) else "N/A"
+
+risk_series = (
+    filtered_df["regulatory_risk_flag"]
+    if "regulatory_risk_flag" in filtered_df.columns
+    else pd.Series([], dtype=bool)
+)
+risk_pct = risk_series.mean() * 100 if not risk_series.empty else float("nan")
+risk_pct_display = f"{risk_pct:.1f}%" if pd.notna(risk_pct) else "N/A"
+
+root_cause_series = (
+    filtered_df["root_cause_category"]
+    if "root_cause_category" in filtered_df.columns
+    else pd.Series([], dtype=str)
+)
+top_root_cause = (
+    root_cause_series.mode().iloc[0]
+    if not root_cause_series.dropna().empty
+    else "N/A"
+)
+
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Total Complaints Analyzed", f"{total_complaints:,}")
+col2.metric("Average Severity Score", avg_severity_display)
+col3.metric("Regulatory Risk Flagged", risk_pct_display)
+col4.metric("Top Root Cause Category", top_root_cause)
