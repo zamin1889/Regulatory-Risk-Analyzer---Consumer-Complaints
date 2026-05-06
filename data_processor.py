@@ -47,11 +47,11 @@ def load_and_clean_data(filepath: str) -> pd.DataFrame:
     df = df.loc[narrative_mask].copy()
 
     # Normalize date fields for downstream time-series analysis.
-    df["Date received"] = pd.to_datetime(df["Date received"], errors="coerce")
+    df["Date received"] = pd.to_datetime(df["Date received"], format='mixed', errors="coerce")
 
     if "Date sent to company" in df.columns:
         df["Date sent to company"] = pd.to_datetime(
-            df["Date sent to company"], errors="coerce"
+            df["Date sent to company"], format='mixed', errors="coerce"
         )
         df["Resolution_Time_Days"] = (
             df["Date sent to company"] - df["Date received"]
